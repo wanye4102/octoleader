@@ -91,38 +91,17 @@
         loadData();
       }, []);
 
-      const CSV_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/gviz/tq?tqx=out:csv&sheet=Sheet1"; // Or use publish-to-web CSV URL
-
-const loadData = async () => {
-  try {
-    const response = await fetch(https://docs.google.com/spreadsheets/d/e/2PACX-1vQkP3bAV2l0hK9CvsTpIH9bCD8xWZcqWw5dbV36u2UpmOY4OlJrt0Yn7Tp4Qf245a-ZMbGm0-lG8p7r/pub?output=csv + "?t=" + Date.now()); // Cache-busting
-    const text = await response.text();
-    const lines = text.trim().split('\n');
-
-    const activities = lines.slice(1).map(line => {
-      const [date, type, agent, count] = line.split(',');
-      return {
-        date: date.trim(),
-        type: type.trim(),
-        agent: agent.trim(),
-        count: parseInt(count.trim())
+      const loadData = () => {
+        try {
+          const stored = storage.get('leaderboard-data');
+          if (stored) {
+            processData(stored.activities);
+            setLastUpdated(stored.timestamp);
+          }
+        } catch (error) {
+          console.log('No existing data found');
+        }
       };
-    });
-
-    const dataToStore = {
-      activities,
-      timestamp: new Date().toISOString()
-    };
-
-    // Optional: store in localStorage if you still want to cache
-    storage.set('leaderboard-data', dataToStore);
-    processData(activities);
-    setLastUpdated(dataToStore.timestamp);
-  } catch (error) {
-    console.error("Failed to fetch leaderboard data:", error);
-  }
-};
-
 
       const processData = (activities) => {
         const agentStats = {};
