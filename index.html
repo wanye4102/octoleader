@@ -95,37 +95,41 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/1JhQa1tw50kfTv1w8otW6A_K
 
 const loadData = async () => {
   try {
-    console.log("📡 Fetching leaderboard CSV...");
     const response = await fetch(CSV_URL + "?t=" + Date.now());
     const text = await response.text();
 
-    console.log("📄 Raw CSV preview:", text.slice(0, 300));
-
     const lines = text.trim().split('\n');
-    console.log("📋 Line count:", lines.length);
-    console.log("🔹 First 3 lines:", lines.slice(0, 3));
 
-    const activities = lines.slice(1).map((line, index) => {
-      const parts = line.split(',');
-      if (parts.length < 4) {
-        console.warn(`⚠️ Skipping bad row [${index}]: ${line}`);
-        return null;
-      }
-      const [date, type, agent, count] = parts;
-      return {
-        date: date.trim(),
-        type: type.trim(),
-        agent: agent.trim(),
-        count: parseInt(count.trim())
-      };
-    }).filter(Boolean);
-
-    console.log("✅ Parsed activities:", activities);
+    const activities = lines
+      .slice(1) // ✅ Skip the header row
+      .map((line, index) => {
+        const parts = line.split(',');
+        if (parts.length < 4) {
+          console.warn(`⚠️ Skipping bad row [${index}]: ${line}`);
+          return null;
+        }
+        const [date, type, agent, count] = parts;
+        return {
+          date: date.trim(),
+          type: type.trim(),
+          agent: agent.trim(),
+          count: parseInt(count.trim())
+        };
+      }).filter(Boolean);
 
     const dataToStore = {
       activities,
       timestamp: new Date().toISOString()
     };
+
+    storage.set('leaderboard-data', dataToStore);
+    processData(activities);
+    setLastUpdated(dataToStore.timestamp);
+
+  } catch (error) {
+    console.error("❌ Failed to fetch or parse leaderboard data:", error);
+  }
+};
 
     storage.set('leaderboard-data', dataToStore);
     processData(activities);
