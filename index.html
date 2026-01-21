@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     body { font-family: 'Inter', sans-serif; }
@@ -96,26 +97,23 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/1JhQa1tw50kfTv1w8otW6A_K
 const loadData = async () => {
   try {
     const response = await fetch(CSV_URL + "?t=" + Date.now());
-    const text = await response.text();
+    const csvText = await response.text();
 
-    const lines = text.trim().split('\n');
+    const parsed = Papa.parse(csvText, {
+      header: true,
+      skipEmptyLines: true
+    });
 
-    const activities = lines
-      .slice(1) // ✅ Skip the header row
-      .map((line, index) => {
-        const parts = line.split(',');
-        if (parts.length < 4) {
-          console.warn(`⚠️ Skipping bad row [${index}]: ${line}`);
-          return null;
-        }
-        const [date, type, agent, count] = parts;
-        return {
-          date: date.trim(),
-          type: type.trim(),
-          agent: agent.trim(),
-          count: parseInt(count.trim())
-        };
-      }).filter(Boolean);
+    const activities = parsed.data.map((row, index) => {
+      return {
+        date: row.Date?.trim(),
+        type: row.Type?.trim(),
+        agent: row.Agent?.trim(),
+        count: parseInt(row.Count?.trim())
+      };
+    }).filter(a =>
+      a.date && a.type && a.agent && !isNaN(a.count)
+    );
 
     const dataToStore = {
       activities,
@@ -130,6 +128,7 @@ const loadData = async () => {
     console.error("❌ Failed to fetch or parse leaderboard data:", error);
   }
 };
+
       
       const processData = (activities) => {
         const agentStats = {};
