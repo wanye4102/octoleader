@@ -91,7 +91,7 @@
         loadData();
       }, []);
 
-const CSV_URL = "https://docs.google.com/spreadsheets/d/1JhQa1tw50kfTv1w8otW6A_Khyip7VsEQEhS4mNCUSjw/gviz/tq?tqx=out:csv&sheet=Sheet3"; // Or use publish-to-web CSV URL
+const CSV_URL = "https://docs.google.com/spreadsheets/d/1JhQa1tw50kfTv1w8otW6A_Khyip7VsEQEhS4mNCUSjw/gviz/tq?tqx=out:csv&sheet=Sheet3";
 
 const loadData = async () => {
   try {
@@ -118,7 +118,7 @@ const loadData = async () => {
         agent: agent.trim(),
         count: parseInt(count.trim())
       };
-    }).filter(Boolean); // Remove nulls
+    }).filter(Boolean);
 
     console.log("✅ Parsed activities:", activities);
 
@@ -129,12 +129,7 @@ const loadData = async () => {
 
     storage.set('leaderboard-data', dataToStore);
     processData(activities);
-    setLastUpdated(dataToStore.timestamp);
-
-  } catch (error) {
-    console.error("❌ Failed to fetch or parse leaderboard data:", error);
-  }
-};
+    setLas
 
     // Optional: store in localStorage if you still want to cache
     storage.set('leaderboard-data', dataToStore);
