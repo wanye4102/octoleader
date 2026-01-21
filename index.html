@@ -8,7 +8,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     body { font-family: 'Inter', sans-serif; }
@@ -19,6 +18,10 @@
 
   <script type="text/babel">
     const { useState, useEffect } = React;
+
+    const SHEET_ID = '1JhQa1tw50kfTv1w8otW6A_Khyip7VsEQEhS4mNCUSjw';
+    const SHEET_NAME = 'Sheet3';
+    const REFRESH_INTERVAL = 60000; // 60 seconds
 
     const POINT_VALUES = {
       'Install Booked (LCT Install Support Pipeline)': 1,
@@ -38,25 +41,9 @@
       'Aged Complaint': 'Aged Complaint'
     };
 
-    const storage = {
-      get: (key) => {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : null;
-      },
-      set: (key, value) => {
-        localStorage.setItem(key, JSON.stringify(value));
-      }
-    };
-
     const TrophyIcon = () => (
       <svg className="w-8 h-8 mx-auto" fill="currentColor" viewBox="0 0 24 24">
         <path d="M6 2h12v2h2a2 2 0 012 2v4a2 2 0 01-2 2h-.5A6 6 0 0112 17v3h3v2H9v-2h3v-3a6 6 0 01-7.5-5H4a2 2 0 01-2-2V6a2 2 0 012-2h2V2zm0 2v4H4V6h2zm12 0v2h2v2h-2V4zm-6 11a4 4 0 004-4V4H8v7a4 4 0 004 4z"/>
-      </svg>
-    );
-
-    const UploadIcon = () => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
     );
 
@@ -66,9 +53,9 @@
       </svg>
     );
 
-    const CalendarIcon = () => (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    const RefreshIcon = ({ spinning }) => (
+      <svg className={`w-4 h-4 ${spinning ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
     );
 
@@ -86,59 +73,51 @@
       const [leaderboardData, setLeaderboardData] = useState([]);
       const [recentActivity, setRecentActivity] = useState([]);
       const [lastUpdated, setLastUpdated] = useState(null);
-      const [isDragging, setIsDragging] = useState(false);
+      const [isLoading, setIsLoading] = useState(true);
+      const [error, setError] = useState(null);
 
       useEffect(() => {
-        loadData();
+        fetchData();
+        const interval = setInterval(fetchData, REFRESH_INTERVAL);
+        return () => clearInterval(interval);
       }, []);
 
-const CSV_URL = "https://docs.google.com/spreadsheets/d/1JhQa1tw50kfTv1w8otW6A_Khyip7VsEQEhS4mNCUSjw/gviz/tq?tqx=out:csv&sheet=Sheet3";
-
-const loadData = async () => {
-  try {
-    console.log("📡 Fetching CSV...");
-    const response = await fetch(CSV_URL + "?t=" + Date.now());
-    const csvText = await response.text();
-
-    console.log("📄 Raw CSV text preview:", csvText.slice(0, 500));
-
-    const parsed = Papa.parse(csvText, {
-      header: true,
-      skipEmptyLines: true
-    });
-
-    console.log("🧠 Parsed result:", parsed);
-
-    const activities = parsed.data.map((row, index) => {
-      console.log(`🔍 Row ${index}:`, row);
-      return {
-        date: row.Date?.trim(),
-        type: row.Type?.trim(),
-        agent: row.Agent?.trim(),
-        count: parseInt(row.Count?.trim())
+      const fetchData = async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
+          
+          const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch data from Google Sheets');
+          }
+          
+          const text = await response.text();
+          const lines = text.trim().split('\n');
+          
+          // Remove quotes and parse CSV
+          const activities = lines.map(line => {
+            const parts = line.split(',').map(part => part.replace(/^"|"$/g, '').trim());
+            return {
+              date: parts[0],
+              type: parts[1],
+              agent: parts[2],
+              count: parseInt(parts[3]) || 1
+            };
+          }).filter(a => a.date && a.type && a.agent);
+          
+          processData(activities);
+          setLastUpdated(new Date().toISOString());
+          setIsLoading(false);
+        } catch (err) {
+          console.error('Error fetching data:', err);
+          setError(err.message);
+          setIsLoading(false);
+        }
       };
-    }).filter(a =>
-      a.date && a.type && a.agent && !isNaN(a.count)
-    );
 
-    console.log("✅ Final parsed activities:", activities);
-
-    const dataToStore = {
-      activities,
-      timestamp: new Date().toISOString()
-    };
-
-    storage.set('leaderboard-data', dataToStore);
-    processData(activities);
-    setLastUpdated(dataToStore.timestamp);
-
-  } catch (error) {
-    console.error("❌ Failed to fetch or parse leaderboard data:", error);
-  }
-};
-
-
-      
       const processData = (activities) => {
         const agentStats = {};
         
@@ -175,47 +154,6 @@ const loadData = async () => {
         setRecentActivity(recent);
       };
 
-      const handleFileUpload = async (file) => {
-        const text = await file.text();
-        const lines = text.trim().split('\n');
-        
-        const activities = lines.map(line => {
-          const [date, type, agent, count] = line.split(',');
-          return {
-            date: date.trim(),
-            type: type.trim(),
-            agent: agent.trim(),
-            count: parseInt(count.trim())
-          };
-        });
-        
-        const dataToStore = {
-          activities,
-          timestamp: new Date().toISOString()
-        };
-        
-        storage.set('leaderboard-data', dataToStore);
-        processData(activities);
-        setLastUpdated(dataToStore.timestamp);
-      };
-
-      const handleDrop = (e) => {
-        e.preventDefault();
-        setIsDragging(false);
-        
-        const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith('.csv')) {
-          handleFileUpload(file);
-        }
-      };
-
-      const handleFileInput = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          handleFileUpload(file);
-        }
-      };
-
       const getMedalColor = (rank) => {
         if (rank === 0) return 'text-yellow-400';
         if (rank === 1) return 'text-gray-300';
@@ -239,47 +177,37 @@ const loadData = async () => {
               <p className="text-pink-100 text-lg font-medium">Performance League • Powered by Octopus Energy</p>
             </div>
 
-            {/* Compact Upload Section */}
+            {/* Status Bar */}
             <div className="flex justify-center mb-6">
-              <div
-                className={`inline-flex items-center gap-3 border-2 border-dashed rounded-lg px-6 py-3 transition-all ${
-                  isDragging ? 'border-white bg-white/20' : 'border-white/40 bg-white/10'
-                }`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-              >
-                <UploadIcon />
+              <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg px-6 py-3">
+                <RefreshIcon spinning={isLoading} />
                 <div className="text-left">
-                  <p className="text-white font-semibold text-sm">Update Leaderboard</p>
-                  <p className="text-pink-100 text-xs">Drop CSV or click to upload</p>
+                  <p className="text-white font-semibold text-sm">
+                    {error ? 'Error loading data' : isLoading ? 'Updating...' : 'Live Data'}
+                  </p>
+                  <p className="text-pink-100 text-xs">
+                    {lastUpdated ? `Updated: ${new Date(lastUpdated).toLocaleTimeString()}` : 'Connecting...'}
+                  </p>
                 </div>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileInput}
-                  className="hidden"
-                  id="file-upload"
-                />
-                <label
-                  htmlFor="file-upload"
-                  className="px-4 py-2 bg-white text-purple-600 rounded-lg cursor-pointer hover:bg-pink-50 transition-colors font-semibold text-sm"
+                <button
+                  onClick={fetchData}
+                  className="px-4 py-2 bg-white text-purple-600 rounded-lg hover:bg-pink-50 transition-colors font-semibold text-sm"
                 >
-                  Browse
-                </label>
+                  Refresh Now
+                </button>
               </div>
             </div>
 
-            {lastUpdated && (
-              <p className="text-center text-pink-100 text-sm mb-6 flex items-center justify-center gap-2">
-                <CalendarIcon />
-                Last updated: {new Date(lastUpdated).toLocaleString()}
-              </p>
+            {error && (
+              <div className="bg-red-500 text-white p-4 rounded-lg mb-6 text-center">
+                <p className="font-semibold">Error: {error}</p>
+                <p className="text-sm">Make sure the Google Sheet is public and published to the web</p>
+              </div>
             )}
 
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Leaderboard - Now takes 2 columns */}
+              {/* Leaderboard */}
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
                   <div className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
@@ -293,10 +221,12 @@ const loadData = async () => {
                   <div className="divide-y">
                     {leaderboardData.length === 0 ? (
                       <div className="p-12 text-center">
-                        <div className="text-gray-300 mb-4">
+                        <div className="text-gray-300 mb-4 flex justify-center">
                           <OctopusIcon />
                         </div>
-                        <p className="text-gray-500 text-lg">Upload a CSV file to see the leaderboard</p>
+                        <p className="text-gray-500 text-lg">
+                          {isLoading ? 'Loading data...' : 'No data available'}
+                        </p>
                       </div>
                     ) : (
                       leaderboardData.map((agent, index) => (
