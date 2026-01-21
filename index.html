@@ -96,15 +96,21 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/1JhQa1tw50kfTv1w8otW6A_K
 
 const loadData = async () => {
   try {
+    console.log("📡 Fetching CSV...");
     const response = await fetch(CSV_URL + "?t=" + Date.now());
     const csvText = await response.text();
+
+    console.log("📄 Raw CSV text preview:", csvText.slice(0, 500));
 
     const parsed = Papa.parse(csvText, {
       header: true,
       skipEmptyLines: true
     });
 
+    console.log("🧠 Parsed result:", parsed);
+
     const activities = parsed.data.map((row, index) => {
+      console.log(`🔍 Row ${index}:`, row);
       return {
         date: row.Date?.trim(),
         type: row.Type?.trim(),
@@ -114,6 +120,8 @@ const loadData = async () => {
     }).filter(a =>
       a.date && a.type && a.agent && !isNaN(a.count)
     );
+
+    console.log("✅ Final parsed activities:", activities);
 
     const dataToStore = {
       activities,
@@ -128,6 +136,7 @@ const loadData = async () => {
     console.error("❌ Failed to fetch or parse leaderboard data:", error);
   }
 };
+
 
       
       const processData = (activities) => {
